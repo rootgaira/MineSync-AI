@@ -1,0 +1,1213 @@
+# MineSync AI - Code Explanation
+
+## Table of Contents
+1. Project Overview
+2. Frontend Architecture
+3. Backend Architecture
+4. Database Design
+5. API Endpoints
+6. Data Flow
+7. Key Technologies
+8. Code Organization
+
+---
+
+## 1. Project Overview
+
+MineSync AI is a web-based intelligent document processing platform for mining and geological data.
+
+**Core Purpose:**
+- Accept mining/geological documents (PDFs, images, Excel, Word)
+- Extract structured data using AI
+- Validate extracted information
+- Enable AI-powered querying with source traceability
+- Generate official parliamentary responses
+- Create analytics and reports
+
+**Architecture Type:** Three-tier (Frontend-Backend-Database)
+
+**Technology Stack:**
+- Frontend: React 18+ (JavaScript)
+- Backend: FastAPI (Python)
+- Database: PostgreSQL (SQL)
+- Communication: HTTP/REST with JSON
+
+---
+
+## 2. Frontend Architecture
+
+### Location
+```
+frontend/src/
+├── App.js              # Main application router
+├── App.css             # Global styling
+└── components/         # React components
+    ├── Sidebar.js
+    ├── Dashboard.js
+    ├── Documents.js
+    ├── AIQuery.js
+    ├── ParliamentaryQuery.js
+    └── Analytics.js
+```
+
+### How Frontend Works
+
+#### App.js - Main Application
+```javascript
+// App.js is the root component that:
+// 1. Maintains current page state (currentPage)
+// 2. Routes between different pages based on state
+// 3. Passes apiUrl to all components so they can call backend
+
+const [currentPage, setCurrentPage] = useState('dashboard');
+
+// When user clicks sidebar item, setCurrentPage is called
+// This triggers re-render with the new page component
+```
+
+**Key Pattern:** React component routing without a router library (keeping it simple)
+
+#### Sidebar.js - Navigation
+```javascript
+// Sidebar component displays navigation menu
+// When user clicks nav item:
+// 1. Item becomes highlighted (active state)
+// 2. setCurrentPage() is called with new page id
+// 3. App.js renders the corresponding component
+
+// Menu items: dashboard, documents, ai-query, parliamentary-query, analytics
+```
+
+#### Dashboard.js - KPI Cards
+```javascript
+// Dashboard shows system metrics
+//
+// Process:
+// 1. Component mounts (useEffect)
+// 2. Calls: GET /analytics from backend
+// 3. Backend returns: {
+//      total_documents: 5,
+//      processed_documents: 3,
+//      failed_documents: 0,
+//      total_extracted_records: 15,
+//      ...
+//    }
+// 4. Stores response in state
+// 5. Renders KPI cards with metrics
+
+// While loading: shows spinner
+// If error: shows error message
+// If success: displays all metrics
+```
+
+#### Documents.js - Document Upload
+```javascript
+// This is the most complex component
+//
+// Features:
+// 1. File selection and validation
+// 2. Upload to backend
+// 3. Display uploaded documents in table
+//
+// Process for uploading:
+// 1. User clicks upload area
+// 2. File input dialog opens
+// 3. User selects file
+// 4. handleFileSelect() stores file in state
+// 5. handleUpload() is called:
+//    - Creates FormData with file + documentType
+//    - Sends: POST /documents/upload?document_type=production_report
+//    - Backend saves file and creates database record
+//    - Response includes new document with id, filename, status, etc.
+//    - New document added to beginning of documents array
+//    - UI updates immediately
+//
+// Document List:
+// 1. On component mount: fetchDocuments()
+// 2. Calls: GET /documents?skip=0&limit=100
+// 3. Renders table with: filename, type, size, status, upload date
+// 4. Status shown as colored badge (green=processed, yellow=pending, red=failed)
+```
+
+#### AIQuery.js - Natural Language Questions
+```javascript
+// Placeholder for Phase 5 (RAG implementation)
+//
+// Current behavior:
+// 1. User enters a question
+// 2. Submits via: POST /query
+// 3. Backend stores query in database
+// 4. Response shown with query ID and timestamp
+// 5. Note: Actual AI response generation comes in Phase 5
+//
+// Future: Will integrate with vector embeddings and local LLM
+```
+
+#### ParliamentaryQuery.js - Official Responses
+```javascript
+// Placeholder for Phase 6 (Parliamentary query assistant)
+//
+// Current behavior:
+// 1. User enters parliamentary question
+// 2. Specifies entities (subsidiaries, mines)
+// 3. Specifies metrics to extract
+// 4. Optional date range
+// 5. Submits via: POST /parliamentary-query
+// 6. Backend stores query
+// 7. UI shows placeholder for draft response
+//
+// Future: Will generate structured evidence tables and draft official responses
+```
+
+#### Analytics.js - System Dashboard
+```javascript
+// Shows comprehensive analytics
+//
+// Displays:
+// 1. All KPI cards (same as dashboard)
+// 2. Success rate calculation
+// 3. Production metrics (when Phase 3 adds extraction)
+// 4. Feature implementation timeline
+// 5. Shows which phases are complete/in progress
+//
+// Helps track project progress and system health
+```
+
+### App.css - Styling
+
+```css
+/* Global design system */
+
+/* Color Scheme */
+Primary Blue: #1e3a8a (navy)
+Accent Blue: #1e40af (darker navy)
+Text: #374151 (dark gray)
+Borders: #d1d5db (light gray)
+Background: #f5f5f5 (light)
+
+/* Component Classes */
+.sidebar          - Navigation menu
+.card             - Container for content
+.kpi-card         - Metric display boxes
+.btn              - Buttons (primary/secondary)
+.badge            - Status indicators
+.table            - Data tables
+.alert            - Error/success messages
+.form-group       - Form inputs with labels
+.file-upload      - Drag-and-drop upload area
+
+/* Responsive */
+- Desktop: Full width
+- Mobile: Single column (uses grid-template-columns: 1fr)
+- Professional government appearance
+```
+
+---
+
+## 3. Backend Architecture
+
+### Location
+```
+backend/
+├── main.py           # FastAPI app + all endpoints
+├── models.py         # SQLAlchemy database models
+├── schemas.py        # Pydantic request/response validation
+├── database.py       # Database connection setup
+├── requirements.txt  # Python dependencies
+└── .env             # Environment variables
+```
+
+### Key Files Explained
+
+#### main.py - FastAPI Application
+
+```python
+# FastAPI is a Python web framework for building REST APIs
+# It automatically:
+# 1. Validates requests using Pydantic schemas
+# 2. Converts responses to JSON
+# 3. Generates API documentation (/docs)
+# 4. Handles errors gracefully
+
+# Key Components:
+
+1. STARTUP EVENT
+# @app.on_event("startup")
+# When backend starts:
+# - Calls init_db() to create tables if they don't exist
+# - Prints success message
+
+2. CORS MIDDLEWARE
+# Allows frontend (localhost:3000) to call backend (localhost:8000)
+# Without this, browser blocks cross-origin requests
+
+3. ENDPOINTS
+# Each endpoint:
+# - Accepts HTTP request with specific method (GET, POST, etc.)
+# - Validates input using Pydantic schema
+# - Interacts with database
+# - Returns response (automatically converted to JSON)
+
+# Example: POST /documents/upload
+@app.post("/documents/upload")
+async def upload_document(file: UploadFile = File(...),
+                         document_type: str = Query(...),
+                         db: Session = Depends(get_db)):
+    """
+    Flow:
+    1. Frontend sends file + document_type
+    2. Validate file extension (must be .pdf, .docx, etc.)
+    3. Save file to disk (backend/uploads/)
+    4. Get file size
+    5. Create Document record in database
+    6. Return new document as JSON
+    """
+
+    # Validate file type
+    allowed_extensions = {".pdf", ".docx", ".xlsx", ".png", ".jpg", ".jpeg"}
+    file_ext = Path(file.filename).suffix.lower()
+    if file_ext not in allowed_extensions:
+        # Return HTTP 400 error if invalid
+        raise HTTPException(status_code=400, detail="File type not supported")
+
+    # Save file to disk
+    file_path = UPLOAD_DIR / file.filename
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)  # Copy uploaded file to disk
+
+    # Create database record
+    db_document = Document(
+        filename=file.filename,
+        file_path=str(file_path),
+        document_type=document_type,
+        status=DocumentStatus.UPLOADED,
+        file_size=file_path.stat().st_size,
+        metadata={"uploaded_by": "system", "original_name": file.filename}
+    )
+    db.add(db_document)          # Add to session
+    db.commit()                   # Save to database
+    db.refresh(db_document)       # Reload to get auto-generated ID
+
+    # Return as JSON
+    return DocumentResponse.from_orm(db_document)
+```
+
+#### models.py - Database Models
+
+```python
+# SQLAlchemy ORM maps Python classes to database tables
+# Each class = One database table
+
+# Example: Document model
+
+class Document(Base):
+    __tablename__ = "documents"  # Table name in PostgreSQL
+
+    # Columns (each becomes a database column)
+    id = Column(Integer, primary_key=True, index=True)
+    filename = Column(String, index=True)
+    file_path = Column(String)
+    document_type = Column(String)
+    status = Column(SQLEnum(DocumentStatus))  # Enum: uploaded, processing, processed, failed
+    upload_date = Column(DateTime, default=datetime.utcnow)
+    file_size = Column(Integer)
+    metadata = Column(JSON, nullable=True)  # Flexible JSON data
+
+    # Relationship (connects to DocumentPage table)
+    pages = relationship("DocumentPage", back_populates="document")
+
+# When you create a Document:
+doc = Document(filename="report.pdf", document_type="production_report", ...)
+db.add(doc)
+db.commit()  # INSERT INTO documents (...) VALUES (...)
+
+# 11 Models (Tables):
+1. Document        - Uploaded files
+2. DocumentPage    - Individual pages/chunks
+3. ExtractedRecord - Structured data extracted
+4. ValidationResult - Validation checks
+5. Query           - User questions
+6. QuerySource     - Document references for queries
+7. Report          - Generated reports
+8. Topic           - Keyword analysis
+9. User            - User management (Phase 8)
+10. AuditLog       - Activity logging
+```
+
+#### schemas.py - Request/Response Validation
+
+```python
+# Pydantic schemas validate incoming requests and format responses
+
+# Example:
+
+class DocumentCreate(BaseModel):
+    filename: str          # Must be string
+    document_type: str     # Must be string
+
+    # When frontend POSTs:
+    # {"filename": "report.pdf", "document_type": "production_report"}
+    # Pydantic validates types and returns DocumentCreate object
+
+class DocumentResponse(BaseModel):
+    id: int
+    filename: str
+    document_type: str
+    status: str
+    upload_date: datetime
+    file_size: int
+    metadata: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True  # Convert ORM to dict
+
+    # When returning document, FastAPI uses this schema to format JSON response:
+    # {"id": 1, "filename": "report.pdf", ...}
+
+# Benefits:
+1. Type validation - catches errors early
+2. Auto docs - /docs shows what each endpoint accepts
+3. Auto JSON conversion - no manual serialization needed
+4. Clear contracts between frontend and backend
+```
+
+#### database.py - Database Connection
+
+```python
+# Manages PostgreSQL connection
+
+# Load .env file
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
+# Example: "postgresql://postgres:postgres@localhost:5432/minesync_ai"
+
+# Create engine (connection pool)
+engine = create_engine(DATABASE_URL)
+
+# Create session factory
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Dependency function for endpoints
+def get_db():
+    db = SessionLocal()  # Create new session
+    try:
+        yield db         # Give to endpoint
+    finally:
+        db.close()       # Always close after use
+
+# Usage in endpoint:
+@app.get("/documents")
+async def list_documents(db: Session = Depends(get_db)):
+    # FastAPI automatically calls get_db() and passes result as 'db'
+    documents = db.query(Document).all()
+    return documents
+```
+
+---
+
+## 4. Database Design
+
+### Schema Overview
+
+```
+DOCUMENTS TABLE
+├── id (primary key)
+├── filename
+├── file_path
+├── document_type
+├── status (uploaded, processing, processed, failed)
+├── upload_date
+├── file_size
+└── metadata (JSON)
+    └── Relationships:
+        └── pages (many) → DOCUMENT_PAGES
+        └── extractions (many) → EXTRACTED_RECORDS
+
+DOCUMENT_PAGES TABLE
+├── id (primary key)
+├── document_id (foreign key)
+├── page_number
+├── raw_text (OCR result, Phase 2)
+└── extracted_text (cleaned text)
+
+EXTRACTED_RECORDS TABLE
+├── id (primary key)
+├── source_document_id (foreign key)
+├── source_page
+├── subsidiary
+├── mine
+├── financial_year
+├── production_value
+├── production_unit
+├── target_value
+├── extracted_data (JSON with full details)
+├── validation_status
+├── confidence_score
+└── extraction_timestamp
+
+VALIDATION_RESULTS TABLE
+├── id (primary key)
+├── record_id (foreign key)
+├── validation_type (unit_normalization, cross_document, anomaly)
+├── status (pass, warning, fail)
+├── message (description of issue)
+├── resolved (boolean - human reviewed?)
+└── created_at
+
+QUERIES TABLE
+├── id (primary key)
+├── user_question
+├── query_type (standard, parliamentary)
+└── metadata (JSON with filter info)
+
+QUERY_SOURCES TABLE
+├── id (primary key)
+├── query_id (foreign key)
+├── source_document_id (foreign key)
+└── relevance_score
+
+REPORTS TABLE
+├── id (primary key)
+├── title
+├── report_type (production, geological, parliamentary)
+├── filters (JSON - what was included)
+├── content (generated report)
+├── generated_at
+└── file_path (if exported)
+
+TOPICS TABLE
+├── id (primary key)
+├── name
+├── keyword_frequency (JSON - {"keyword": count, ...})
+├── document_count
+└── created_at
+
+AUDIT_LOGS TABLE
+├── id (primary key)
+├── action (what happened)
+├── entity_type (what was affected)
+├── entity_id (which record)
+├── user_id (who did it)
+├── timestamp
+└── details (JSON - extra info)
+```
+
+### Data Flow Example: Upload Document
+
+```
+Browser                Frontend              Backend               Database
+   │                      │                    │                      │
+   │ User uploads file    │                    │                      │
+   ├──────────────────────>│                    │                      │
+   │                      │ POST /documents/   │                      │
+   │                      │ upload + file      │                      │
+   │                      ├───────────────────>│                      │
+   │                      │                    │ Validate file type   │
+   │                      │                    │ Save to disk         │
+   │                      │                    │                      │
+   │                      │                    │ INSERT INTO documents│
+   │                      │                    ├─────────────────────>│
+   │                      │                    │                      │ Create record
+   │                      │                    │<─────────────────────┤
+   │                      │    JSON response   │ (with new ID)        │
+   │                      │<───────────────────┤                      │
+   │ Update UI with       │                    │                      │
+   │ new document         │                    │                      │
+   │<──────────────────────┤                    │                      │
+   │                      │                    │                      │
+```
+
+---
+
+## 5. API Endpoints
+
+### Document Management
+
+#### POST /documents/upload
+```
+Request:
+- Form data with file upload
+- Query parameter: document_type
+
+Example:
+curl -X POST "http://localhost:8000/documents/upload?document_type=production_report" \
+  -F "file=@report.pdf"
+
+Response:
+{
+  "id": 1,
+  "filename": "report.pdf",
+  "document_type": "production_report",
+  "status": "uploaded",
+  "upload_date": "2026-09-08T08:30:00",
+  "file_size": 250000
+}
+
+Backend Logic:
+1. Validate file extension
+2. Save file to backend/uploads/
+3. Create Document record in DB
+4. Return created document
+```
+
+#### GET /documents
+```
+Request:
+- Query parameters: skip (default 0), limit (default 10)
+
+Example:
+curl "http://localhost:8000/documents?skip=0&limit=10"
+
+Response:
+{
+  "documents": [
+    {
+      "id": 1,
+      "filename": "report.pdf",
+      "status": "uploaded",
+      ...
+    },
+    {
+      "id": 2,
+      "filename": "geological_survey.pdf",
+      "status": "processed",
+      ...
+    }
+  ],
+  "total": 2
+}
+
+Backend Logic:
+1. Query documents from database with pagination
+2. Convert to JSON responses
+3. Include total count
+```
+
+#### GET /documents/{id}
+```
+Request:
+- URL parameter: document id
+
+Example:
+curl "http://localhost:8000/documents/1"
+
+Response: Single document object
+
+Backend Logic:
+1. Find document by ID
+2. Return if found, else 404 error
+```
+
+#### POST /documents/{id}/process
+```
+Request:
+- URL parameter: document id
+
+Example:
+curl -X POST "http://localhost:8000/documents/1/process"
+
+Response:
+{
+  "message": "Document processing started",
+  "document_id": 1,
+  "status": "processing"
+}
+
+Backend Logic (Phase 1 - Stub):
+1. Update document status to "processing"
+2. Return confirmation
+
+Backend Logic (Phase 2 - Real):
+1. Update status to "processing"
+2. Start OCR process (Tesseract/PaddleOCR)
+3. Extract text and save to database
+4. Update status to "processed" when complete
+```
+
+### Query Endpoints
+
+#### POST /query
+```
+Request:
+{
+  "user_question": "What was coal production in 2025-26?",
+  "query_type": "standard"
+}
+
+Response:
+{
+  "id": 1,
+  "user_question": "What was coal production in 2025-26?",
+  "query_type": "standard",
+  "created_at": "2026-09-08T08:30:00"
+}
+
+Backend Logic (Phase 1 - Stub):
+1. Store query in database
+2. Return query record
+
+Backend Logic (Phase 5 - Real):
+1. Understand query using NLP
+2. Create embeddings from question
+3. Search vector database for similar documents
+4. Query structured database for matching records
+5. Combine results and ask local LLM
+6. Return answer with sources
+```
+
+#### POST /parliamentary-query
+```
+Request:
+{
+  "question": "What was production compared to targets from 2021-22 to 2025-26?",
+  "entities": ["Subsidiary X", "Mine 1"],
+  "metrics": ["production", "target"],
+  "date_range": {"from": "2021-22", "to": "2025-26"}
+}
+
+Response:
+{
+  "query_id": 1,
+  "draft_response": "[Draft will be generated in Phase 6]",
+  "evidence_table": {},
+  "sources": [],
+  "confidence": 0.0
+}
+
+Backend Logic (Phase 6 - Real):
+1. Parse query structure
+2. Extract entities and metrics
+3. Retrieve documents matching entities
+4. Extract data for time period
+5. Cross-validate across sources
+6. Generate official-style response
+7. Create evidence table
+8. Return with confidence scores
+```
+
+### Reports
+
+#### POST /reports/generate
+```
+Request:
+{
+  "report_type": "production",
+  "subsidiary": "Subsidiary X",
+  "financial_year": "2025-26",
+  "include_trends": true,
+  "include_target_vs_actual": true
+}
+
+Response:
+{
+  "id": 1,
+  "title": "Production Report",
+  "report_type": "production",
+  "generated_at": "2026-09-08T08:30:00",
+  "file_path": null
+}
+
+Backend Logic (Phase 7 - Real):
+1. Query database for matching records
+2. Generate summary statistics
+3. Create charts (production trends, target vs actual)
+4. Compile into report format
+5. Generate PDF/DOCX if requested
+6. Store file path in database
+```
+
+### Analytics
+
+#### GET /analytics
+```
+Request: None
+
+Response:
+{
+  "total_documents": 5,
+  "processed_documents": 2,
+  "failed_documents": 0,
+  "total_extracted_records": 15,
+  "total_queries": 3,
+  "total_reports": 1,
+  "validation_alerts": 2,
+  "production_total": 125.5,
+  "target_total": 130.0
+}
+
+Backend Logic:
+1. Count records in each table
+2. Calculate processed/failed ratios
+3. Sum production values (Phase 3+)
+4. Return metrics object
+```
+
+---
+
+## 6. Data Flow Examples
+
+### Example 1: User Uploads Document
+
+```
+Step 1: User selects document
+┌─────────────────────────────────────────────────────────┐
+│ Documents.js                                            │
+│ handleFileSelect() → setSelectedFile(file)              │
+└─────────────────────────────────────────────────────────┘
+
+Step 2: User clicks Upload button
+┌─────────────────────────────────────────────────────────┐
+│ Documents.js                                            │
+│ handleUpload()                                          │
+│ - Create FormData with file + type                     │
+│ - setUploading(true) → show "Uploading..." button      │
+└─────────────────────────────────────────────────────────┘
+
+Step 3: Send HTTP request to backend
+┌─────────────────────────────────────────────────────────┐
+│ Network                                                 │
+│ POST /documents/upload?document_type=production_report  │
+│ Body: file (binary) + metadata                         │
+└─────────────────────────────────────────────────────────┘
+
+Step 4: Backend receives and processes
+┌─────────────────────────────────────────────────────────┐
+│ main.py → upload_document()                             │
+│ - Validate file extension                              │
+│ - Save to backend/uploads/filename                     │
+│ - Create Document ORM object                           │
+│ - db.add(document) → add to session                    │
+│ - db.commit() → SQL INSERT executed                    │
+│ - db.refresh() → get auto-generated ID                │
+└─────────────────────────────────────────────────────────┘
+
+Step 5: Database insert
+┌─────────────────────────────────────────────────────────┐
+│ PostgreSQL                                              │
+│ INSERT INTO documents (                                 │
+│   filename, file_path, document_type,                  │
+│   status, upload_date, file_size, metadata             │
+│ ) VALUES (                                             │
+│   'report.pdf', '/uploads/report.pdf',                 │
+│   'production_report', 'uploaded', now(), 250000, '{}'  │
+│ ) RETURNING id;                                         │
+│ → Returns: id = 1                                       │
+└─────────────────────────────────────────────────────────┘
+
+Step 6: Backend returns response
+┌─────────────────────────────────────────────────────────┐
+│ main.py → DocumentResponse.from_orm(document)           │
+│ Converts ORM object to JSON:                            │
+│ {                                                       │
+│   "id": 1,                                             │
+│   "filename": "report.pdf",                            │
+│   "document_type": "production_report",                │
+│   "status": "uploaded",                                │
+│   "upload_date": "2026-09-08T08:30:00",               │
+│   "file_size": 250000                                  │
+│ }                                                       │
+└─────────────────────────────────────────────────────────┘
+
+Step 7: Frontend receives response
+┌─────────────────────────────────────────────────────────┐
+│ Documents.js → handleUpload()                           │
+│ - res.ok === true ✓                                     │
+│ - newDoc = await res.json()                             │
+│ - setDocuments([newDoc, ...documents])                 │
+│ - Clear file input                                      │
+│ - setUploading(false)                                   │
+└─────────────────────────────────────────────────────────┘
+
+Step 8: UI updates
+┌─────────────────────────────────────────────────────────┐
+│ Documents.js renders                                    │
+│ - New document appears at top of table                 │
+│ - Upload button becomes enabled again                  │
+│ - File input cleared                                    │
+│ - Success feedback shown                                │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Example 2: User Views Dashboard
+
+```
+Step 1: User clicks Dashboard
+┌─────────────────────────────────────────────────────────┐
+│ Sidebar.js                                              │
+│ onClick → setCurrentPage('dashboard')                  │
+└─────────────────────────────────────────────────────────┘
+
+Step 2: App.js renders Dashboard component
+┌─────────────────────────────────────────────────────────┐
+│ App.js                                                  │
+│ currentPage === 'dashboard' → render <Dashboard />      │
+└─────────────────────────────────────────────────────────┘
+
+Step 3: Dashboard mounts and fetches data
+┌─────────────────────────────────────────────────────────┐
+│ Dashboard.js                                            │
+│ useEffect(() => {                                       │
+│   fetchAnalytics() → GET /analytics                    │
+│ }, [])                                                  │
+└─────────────────────────────────────────────────────────┘
+
+Step 4: Backend handles request
+┌─────────────────────────────────────────────────────────┐
+│ main.py → get_analytics()                              │
+│ - db.query(Document).count() → 5                       │
+│ - db.query(Document).filter(status='processed').count() → 3│
+│ - ... count other tables                                │
+│ - Return AnalyticsResponse object                      │
+└─────────────────────────────────────────────────────────┘
+
+Step 5: Database queries
+┌─────────────────────────────────────────────────────────┐
+│ PostgreSQL                                              │
+│ SELECT COUNT(*) FROM documents; → 5                    │
+│ SELECT COUNT(*) FROM documents WHERE status='processed'; → 3│
+│ ... more queries                                        │
+└─────────────────────────────────────────────────────────┘
+
+Step 6: Response sent to frontend
+┌─────────────────────────────────────────────────────────┐
+│ JSON Response:                                          │
+│ {                                                       │
+│   "total_documents": 5,                                │
+│   "processed_documents": 3,                            │
+│   "failed_documents": 0,                               │
+│   "total_extracted_records": 15,                       │
+│   "total_queries": 2,                                  │
+│   "total_reports": 0,                                  │
+│   "validation_alerts": 1,                              │
+│   "production_total": null,                            │
+│   "target_total": null                                 │
+│ }                                                       │
+└─────────────────────────────────────────────────────────┘
+
+Step 7: Frontend updates state
+┌─────────────────────────────────────────────────────────┐
+│ Dashboard.js                                            │
+│ - setAnalytics(data)                                    │
+│ - setLoading(false)                                     │
+└─────────────────────────────────────────────────────────┘
+
+Step 8: KPI cards render
+┌─────────────────────────────────────────────────────────┐
+│ Dashboard renders <div className="kpi-grid">            │
+│ - Total Documents: 5                                    │
+│ - Processed: 3                                          │
+│ - Failed: 0                                             │
+│ - Extracted Records: 15                                │
+│ - Queries: 2                                            │
+│ - Validation Alerts: 1                                  │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 7. Key Technologies Explained
+
+### React (Frontend)
+
+```javascript
+// React renders UI based on state
+// When state changes, components automatically re-render
+
+// Example:
+const [documents, setDocuments] = useState([]);
+
+// When user uploads:
+setDocuments([newDoc, ...documents]);
+// → React sees state changed
+// → Re-renders component
+// → New document appears in list
+
+// Component Lifecycle:
+1. Component created
+2. useEffect() runs (fetch data, setup listeners)
+3. Component renders (returns JSX/HTML)
+4. User interacts (click, input, etc.)
+5. setState() called
+6. Component re-renders with new state
+7. Component unmounts (cleanup)
+
+// JSX: JavaScript that looks like HTML
+// <div className="card">Content</div>
+// Compiles to: React.createElement('div', {className: 'card'}, 'Content')
+```
+
+### FastAPI (Backend)
+
+```python
+# FastAPI automatically handles:
+# 1. Request routing (match URL to function)
+# 2. Request validation (check data types)
+# 3. Response serialization (convert to JSON)
+# 4. Documentation generation (/docs)
+# 5. Error handling
+
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/documents")  # Route definition
+async def get_documents():  # Function name can be anything
+    """Get all documents"""  # Auto-used in documentation
+    return documents
+
+# When client requests: GET /documents
+# FastAPI:
+# 1. Matches to this function
+# 2. Calls get_documents()
+# 3. Converts return value to JSON
+# 4. Sends HTTP 200 response
+```
+
+### SQLAlchemy (Database ORM)
+
+```python
+# ORM = Object-Relational Mapping
+# Maps database tables to Python classes
+
+from sqlalchemy import Column, String, Integer, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+
+Base = declarative_base()
+
+class Document(Base):
+    __tablename__ = "documents"
+    id = Column(Integer, primary_key=True)
+    filename = Column(String)
+    status = Column(String)
+
+# Python side:
+doc = Document(filename="report.pdf", status="uploaded")
+db.add(doc)
+db.commit()
+
+# SQL generated automatically:
+# INSERT INTO documents (filename, status)
+# VALUES ('report.pdf', 'uploaded');
+
+# Benefits:
+# - No SQL injection (SQLAlchemy handles escaping)
+# - Type safety (Python types)
+# - Easier to maintain (no SQL strings scattered in code)
+# - Can switch databases (PostgreSQL, MySQL, SQLite)
+```
+
+### PostgreSQL (Database)
+
+```sql
+-- Relational database stores data in tables
+-- Each table has columns and rows
+
+CREATE TABLE documents (
+    id SERIAL PRIMARY KEY,              -- Auto-incrementing integer
+    filename VARCHAR NOT NULL,           -- Text field (required)
+    file_path VARCHAR NOT NULL,
+    document_type VARCHAR,
+    status VARCHAR DEFAULT 'uploaded',   -- Default value
+    upload_date TIMESTAMP DEFAULT NOW(), -- Current time
+    file_size INTEGER,
+    metadata JSONB                       -- JSON data
+);
+
+-- Index on commonly searched columns for speed
+CREATE INDEX idx_documents_status ON documents(status);
+
+-- Querying:
+SELECT * FROM documents WHERE status = 'processed';
+SELECT COUNT(*) FROM documents;
+SELECT * FROM documents ORDER BY upload_date DESC LIMIT 10;
+```
+
+---
+
+## 8. Code Organization & Patterns
+
+### Frontend File Organization
+
+```
+frontend/src/
+├── App.js              # Main router/state
+│                      # Imports all components
+│                      # Manages currentPage state
+│                      # Routes to components
+│
+├── App.css             # Global styles
+│                      # Design system (colors, spacing)
+│                      # Component styles (.sidebar, .card, etc.)
+│
+└── components/         # Reusable page components
+    ├── Sidebar.js      # Navigation menu
+    ├── Dashboard.js    # KPI dashboard
+    ├── Documents.js    # Upload & list
+    ├── AIQuery.js      # Query interface
+    ├── ParliamentaryQuery.js  # Official response
+    └── Analytics.js    # Analytics dashboard
+
+Pattern:
+- Each component is a function
+- Each component can have hooks (useState, useEffect)
+- Each component receives props from App.js
+- Components call backend API
+- Components render JSX
+```
+
+### Backend File Organization
+
+```
+backend/
+├── main.py
+│   ├── Imports          # FastAPI, schemas, models, database
+│   ├── App creation     # app = FastAPI()
+│   ├── Middleware       # CORS, logging
+│   ├── Endpoints        # /documents, /query, etc.
+│   │   ├── Input validation
+│   │   ├── Business logic
+│   │   ├── Database operations
+│   │   └── Response formatting
+│   └── Error handling
+│
+├── models.py
+│   ├── Base            # declarative_base()
+│   ├── Classes         # Document, Query, Report, etc.
+│   └── Relationships   # Foreign keys, relationships
+│
+├── schemas.py
+│   ├── Request models  # What endpoint accepts
+│   ├── Response models # What endpoint returns
+│   └── Conversion methods
+│
+├── database.py
+│   ├── Engine creation
+│   ├── Session factory
+│   ├── Dependency function
+│   └── init_db()
+│
+└── .env                # Configuration
+
+Pattern:
+- models.py = database structure
+- schemas.py = API contracts
+- database.py = connection setup
+- main.py = business logic & endpoints
+```
+
+### Common Patterns
+
+#### 1. Component State Management (React)
+```javascript
+const [documents, setDocuments] = useState([]);
+
+// Read state:
+console.log(documents);  // Current value
+
+// Update state:
+setDocuments([newDoc, ...documents]);  // Immutable update
+
+// React detects state change → re-renders
+```
+
+#### 2. Async Data Fetching (React)
+```javascript
+useEffect(() => {
+    fetchData();
+}, []);  // Only run once on mount
+
+async function fetchData() {
+    try {
+        setLoading(true);
+        const res = await fetch(url);
+        const data = await res.json();
+        setData(data);
+    } catch (err) {
+        setError(err.message);
+    } finally {
+        setLoading(false);
+    }
+}
+
+// UI shows:
+// Loading? → Spinner
+// Error? → Error message
+// Success? → Data display
+```
+
+#### 3. API Endpoint (FastAPI)
+```python
+@app.get("/documents")  # Route
+async def get_documents(  # Handler
+    skip: int = Query(0),  # Parameter with default
+    limit: int = Query(10),
+    db: Session = Depends(get_db)  # Dependency injection
+) -> DocumentListResponse:  # Return type
+    """Docstring auto-used in /docs"""
+
+    # Business logic
+    docs = db.query(Document).offset(skip).limit(limit).all()
+    total = db.query(Document).count()
+
+    # Response
+    return DocumentListResponse(
+        documents=[DocumentResponse.from_orm(doc) for doc in docs],
+        total=total
+    )
+```
+
+#### 4. Database Operation (SQLAlchemy)
+```python
+# Create
+doc = Document(filename="report.pdf", ...)
+db.add(doc)
+db.commit()
+db.refresh(doc)  # Get auto-generated ID
+
+# Read
+doc = db.query(Document).filter(Document.id == 1).first()
+
+# Read all
+docs = db.query(Document).all()
+
+# Update
+doc.status = "processed"
+db.commit()
+
+# Delete
+db.delete(doc)
+db.commit()
+```
+
+---
+
+## Summary
+
+### Frontend Flow
+1. User interacts with React UI
+2. Component state updates
+3. API call to backend
+4. Display response
+
+### Backend Flow
+1. Receive HTTP request
+2. Validate with Pydantic schema
+3. Query/update database with SQLAlchemy
+4. Return JSON response
+
+### Database Flow
+1. Schema defined in SQLAlchemy models
+2. Tables auto-created on startup
+3. Data stored in PostgreSQL
+4. ORM handles SQL generation
+
+### Communication Flow
+Browser ↔ FastAPI ↔ PostgreSQL
+ (JSON)    (Python)   (SQL)
+
+---
+
+**Phase 1 Status:** Complete and working
+**Next Phase:** OCR & Document Processing
+**Lines of Code:** ~2,000
+**Architecture:** Three-tier MVC pattern
