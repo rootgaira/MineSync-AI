@@ -1,7 +1,7 @@
 """
 Pydantic schemas for request/response validation
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -13,16 +13,15 @@ class DocumentCreate(BaseModel):
 
 
 class DocumentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     filename: str
     document_type: str
     status: str
     upload_date: datetime
     file_size: int
-    metadata: Optional[Dict[str, Any]] = None
-
-    class Config:
-        from_attributes = True
+    metadata: Optional[Dict[str, Any]] = Field(default=None, validation_alias="extra_metadata")
 
 
 class DocumentListResponse(BaseModel):

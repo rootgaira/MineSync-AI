@@ -91,7 +91,7 @@ async def upload_document(
             document_type=document_type,
             status=DocumentStatus.UPLOADED,
             file_size=file_size,
-            metadata={"uploaded_by": "system", "original_name": file.filename},
+            extra_metadata={"uploaded_by": "system", "original_name": file.filename},
         )
         db.add(db_document)
         db.commit()
@@ -130,23 +130,26 @@ async def get_document(document_id: int, db: Session = Depends(get_db)):
 @app.post("/documents/{document_id}/process")
 async def process_document(document_id: int, db: Session = Depends(get_db)):
     """
-    Trigger processing of a document (OCR, text extraction, AI extraction).
-    In Phase 1, this is a stub. Phase 2 will implement actual processing.
+    Trigger processing of a document (OCR, text extraction, document classification).
+    Phase 2 implementation - actual OCR and text extraction.
     """
+    from processing_service import ProcessingService
+
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # For Phase 1, just update status to show it was triggered
-    document.status = DocumentStatus.PROCESSING
-    db.commit()
-    db.refresh(document)
+    # Process the document
+    result = ProcessingService.process_document_file(
+        db=db,
+        document_id=document_id,
+        file_path=document.file_path,
+    )
 
-    return {
-        "message": "Document processing started",
-        "document_id": document_id,
-        "status": document.status,
-    }
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result.get("error", "Processing failed"))
+
+    return result
 
 
 # ============================================================================
@@ -162,6 +165,42 @@ async def get_extraction(document_id: int, db: Session = Depends(get_db)):
         .all()
     )
     return [ExtractedRecordResponse.from_orm(record) for record in records]
+
+
+@app.get("/documents/{document_id}/pages")
+async def get_document_pages(document_id: int, db: Session = Depends(get_db)):
+    """Get all extracted pages for a document (Phase 2+)"""
+    from processing_service import ProcessingService
+
+    pages = ProcessingService.get_document_pages(db, document_id)
+    if not pages:
+        raise HTTPException(status_code=404, detail="No pages found for document")
+
+    return {
+        "document_id": document_id,
+        "pages": pages,
+        "total_pages": len(pages),
+    }
+
+
+@app.get("/documents/{document_id}/text")
+async def get_document_text(document_id: int, db: Session = Depends(get_db)):
+    """Get combined text from all pages (Phase 2+)"""
+    from processing_service import ProcessingService
+
+    # Verify document exists
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    text = ProcessingService.get_document_text(db, document_id)
+
+    return {
+        "document_id": document_id,
+        "filename": document.filename,
+        "status": document.status,
+        "text": text,
+    }
 
 
 # ============================================================================
@@ -180,7 +219,7 @@ async def create_query(
     db_query = QueryModel(
         user_question=query.user_question,
         query_type=query.query_type,
-        metadata=query.metadata,
+        extra_metadata=query.metadata,
     )
     db.add(db_query)
     db.commit()
@@ -205,7 +244,7 @@ async def parliamentary_query(
     db_query = QueryModel(
         user_question=query.question,
         query_type="parliamentary",
-        metadata={
+        extra_metadata={
             "entities": query.entities,
             "metrics": query.metrics,
             "date_range": query.date_range,

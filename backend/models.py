@@ -27,7 +27,7 @@ class Document(Base):
     status = Column(SQLEnum(DocumentStatus), default=DocumentStatus.UPLOADED)
     upload_date = Column(DateTime, default=datetime.utcnow)
     file_size = Column(Integer)
-    metadata = Column(JSON, nullable=True)  # Additional metadata like source, date extracted, etc.
+    extra_metadata = Column("metadata", JSON, nullable=True)  # Additional metadata like source, date extracted, etc.
 
     # Relationships
     pages = relationship("DocumentPage", back_populates="document", cascade="all, delete-orphan")
@@ -94,7 +94,7 @@ class Query(Base):
     user_question = Column(Text)
     query_type = Column(String)  # "standard", "parliamentary"
     created_at = Column(DateTime, default=datetime.utcnow)
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column("metadata", JSON, nullable=True)
 
 
 class QuerySource(Base):
